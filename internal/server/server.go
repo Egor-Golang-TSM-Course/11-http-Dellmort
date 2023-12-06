@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"lesson11/internal/models"
 	"log/slog"
 	"net/http"
 	"os"
@@ -40,6 +41,7 @@ func (s *server) Start(address, port string) error {
 func (s *server) configureRouter() {
 	s.router.HandleFunc("/", s.homeMessage())
 	s.router.HandleFunc("/time", s.sendTime())
+	s.router.HandleFunc("/user", s.treatmentUser())
 }
 
 func (s *server) homeMessage() func(http.ResponseWriter, *http.Request) {
@@ -59,11 +61,43 @@ func (s *server) sendTime() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func (s *server) respond(w http.ResponseWriter, r *http.Response, code int, data any) {
+var persons = make([]models.Person, 0)
+
+func (s *server) treatmentUser() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			s.respond(w, http.StatusOK, persons)
+			return
+		}
+
+		if r.Method == http.MethodPost {
+			var user models.Person
+			if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+				s.error(w, http.StatusBadRequest, fmt.Errorf("invalid JSON format"))
+				return
+			}
+
+			if user.Age == 0 || user.Name == "" {
+				s.error(w, http.StatusBadRequest, fmt.Errorf("invalid fields"))
+				return
+			}
+
+			persons = append(persons, user)
+			s.respond(w, http.StatusOK, true)
+			return
+		}
+	}
+}
+
+func (s *server) respond(w http.ResponseWriter, code int, data any) {
 	data = map[string]any{
 		"response": data,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(data)
+}
+
+func (s *server) error(w http.ResponseWriter, code int, err error) {
+	s.respond(w, code, map[string]string{"error": err.Error()})
 }

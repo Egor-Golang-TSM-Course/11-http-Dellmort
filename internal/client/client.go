@@ -1,7 +1,8 @@
 package client
 
 import (
-	"fmt"
+	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 )
@@ -16,17 +17,27 @@ func NewClient() *client {
 	}
 }
 
-func (c *client) RequestServer(url string) error {
-	resp, err := c.client.Get(url)
+func (c *client) Request(method string, url string, query any) ([]byte, error) {
+	buf, err := json.Marshal(query)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(buf))
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
 	}
 	defer resp.Body.Close()
+
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	fmt.Println(string(data))
 
-	return nil
+	return data, nil
 }
